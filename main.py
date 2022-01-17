@@ -115,21 +115,30 @@ def getValidateToken() -> typing.Optional[str]:
             # imgDiff.save('diff.png')
             targetPosX = targetPosX / 260 * 270
 
-            # 模拟拖拽，时间单位为1/50s也就是20ms，一共200-500+-100ms
-            # 另外鼠标放到滑块上等待100-300ms，松开再等待50-100ms
+            # 模拟拖拽，时间单位为1/50s也就是20ms，根据滑动距离一共是500-800+-100ms
+            # 另外鼠标放到滑块上等待400-700ms，松开再等待100-200ms
             # 拟合拖拽轨迹的多项式定义域和值域均为[0, 1]，且f(0)=0 f(1)=1
             polynomial = random.choice((
                 (0, 7.27419, -23.0881, 40.86, -40.2374, 20.1132, -3.922),
                 (0, 11.2642, -54.1671, 135.817, -180.721, 119.879, -31.0721),
                 (0, 7.77852, -37.3727, 103.78, -155.152, 115.664, -33.6981),
                 (0, 12.603, -61.815, 159.706, -227.619, 166.648, -48.5237),
+                (0, 9.94916, -35.3439, 57.2436, -43.3425, 12.4937),
+                (0, 8.88576, -29.9556, 49.0498, -39.2717, 12.2918),
+                (0, 8.7663, -28.3669, 42.9499, -30.9548, 8.60551),
+                (0, 7.36696, -20.605, 27.705, -18.1929, 4.72597),
+                (0, -.360233, 15.4068, -36.168, 32.64, -10.5186),
+                (0, -.260426, 10.5665, -17.711, 9.70626, -1.30134),
+                (0, -.00431368, .131857, 15.3877, -26.4217, 11.9064),
+                (0, -.607056, 19.5733, -56.8777, 62.7801, -23.8686),
+                (0, 5.84619, -14.9367, 19.8566, -13.293, 3.52692),
             ))
-            actionTime = round((200 + targetPosX / 270 * 500 + random.randint(-100, 100)) / 20)
+            actionTime = round((500 + targetPosX / 270 * 300 + random.randint(-100, 100)) / 20)
             targetSeq = tuple(round(polynomialCalc(x / (actionTime - 1), polynomial) * targetPosX) for x in range(actionTime))
-            ac: ActionChains = ActionChains(browser, 20).click_and_hold(domYidunSlider).pause(random.randint(100, 300) / 1000)
+            ac: ActionChains = ActionChains(browser, 20).click_and_hold(domYidunSlider).pause(random.randint(400, 700) / 1000)
             for i in range(len(targetSeq) - 1):
                 ac = ac.move_by_offset(targetSeq[i + 1] - targetSeq[i], 0)
-            ac.pause(random.randint(50, 100) / 1000).release().perform()
+            ac.pause(random.randint(100, 200) / 1000).release().perform()
 
             # 成功了吗？
             try:
