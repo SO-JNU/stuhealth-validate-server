@@ -79,10 +79,16 @@ browser: webdriver.Firefox = None
 
 # 获取验证码的validate token
 def getValidateToken() -> typing.Optional[str]:
-    # browser.execute_script('window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
+    # 触发验证码组件初始化
+    # (document.querySelector('#captcha .yidun .yidun_bg-img[src^="https://"]') || {}).src = null;
+    # window.initNECaptcha({
+    #     element: "#captcha",
+    #     captchaId: "7d856ac2068b41a1b8525f3fffe92d1c",
+    #     width: "320px",
+    #     mode: "float",
+    # });
     browser.execute_script('(document.querySelector(\'#captcha .yidun .yidun_bg-img[src^="https://"]\')||{}).src=null;window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
     WebDriverWait(browser, 3).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
-    # time.sleep(3)
     domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
     domYidunSlider = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_slider')
     domValidate = browser.find_element(By.CSS_SELECTOR, '#captcha input.yidun_input[name="NECaptchaValidate"]')
