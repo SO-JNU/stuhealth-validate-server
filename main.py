@@ -79,78 +79,72 @@ browser: webdriver.Firefox = None
 
 # 获取验证码的validate token
 def getValidateToken() -> typing.Optional[str]:
-    # 打开页面
-    browser.execute_script('window.open('')')
-    browser.switch_to.window(browser.window_handles[1])
+    # browser.execute_script('window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
+    browser.execute_script('(document.querySelector(\'#captcha .yidun .yidun_bg-img[src^="https://"]\')||{}).src=null;window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
+    WebDriverWait(browser, 3).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
+    # time.sleep(3)
+    domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
+    domYidunSlider = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_slider')
+    domValidate = browser.find_element(By.CSS_SELECTOR, '#captcha input.yidun_input[name="NECaptchaValidate"]')
 
-    try:
-        browser.get('https://stuhealth.jnu.edu.cn/')
-        WebDriverWait(browser, 3).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
-        domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
-        domYidunSlider = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_slider')
-        domValidate = browser.find_element(By.CSS_SELECTOR, '#captcha input.yidun_input[name="NECaptchaValidate"]')
+    # 重试3次
+    for i in range(3):
+        # 获取滑动验证码图片
+        img = Image.open(io.BytesIO(requests.get(domYidunImg.get_attribute('src').replace('@2x', '').replace('@3x', '')).content))
+        # print(domYidunImg.get_attribute('src'))
+        imgHash = getImageHash(img)
+        imgBackground = min(imgBackgroundWithHash, key=lambda i: getImageHashDiff(imgHash, i[1]))[0]
 
-        # 重试3次
-        for i in range(3):
-            # 获取滑动验证码图片
-            img = Image.open(io.BytesIO(requests.get(domYidunImg.get_attribute('src').replace('@2x', '').replace('@3x', '')).content))
-            # print(domYidunImg.get_attribute('src'))
-            imgHash = getImageHash(img)
-            imgBackground = min(imgBackgroundWithHash, key=lambda i: getImageHashDiff(imgHash, i[1]))[0]
+        # 获取滑动位置
+        imgDiff = ImageChops.difference(img, imgBackground).convert('L')
+        imgDiffBytes = imgDiff.tobytes()
+        targetPosX = 0
+        targetPixelCount = 0
+        for x in range(imgDiff.width):
+            for y in range(imgDiff.height):
+                if imgDiffBytes[y * imgDiff.width + x] >= 16:
+                    targetPosX += x
+                    targetPixelCount += 1
+        targetPosX = round(targetPosX / targetPixelCount) - 22
+        # print(targetPosX)
+        # for y in range(imgDiff.height):
+        #     imgDiff.putpixel((targetPosX, y), 0xFFFFFF)
+        # imgDiff.save('diff.png')
+        targetPosX = targetPosX / 260 * 270
 
-            # 获取滑动位置
-            imgDiff = ImageChops.difference(img, imgBackground).convert('L')
-            imgDiffBytes = imgDiff.tobytes()
-            targetPosX = 0
-            targetPixelCount = 0
-            for x in range(imgDiff.width):
-                for y in range(imgDiff.height):
-                    if imgDiffBytes[y * imgDiff.width + x] >= 16:
-                        targetPosX += x
-                        targetPixelCount += 1
-            targetPosX = round(targetPosX / targetPixelCount) - 22
-            # print(targetPosX)
-            # for y in range(imgDiff.height):
-            #     imgDiff.putpixel((targetPosX, y), 0xFFFFFF)
-            # imgDiff.save('diff.png')
-            targetPosX = targetPosX / 260 * 270
+        # 模拟拖拽，时间单位为1/50s也就是20ms，根据滑动距离一共是500-800+-100ms
+        # 另外鼠标放到滑块上等待400-700ms，松开再等待100-200ms
+        # 拟合拖拽轨迹的多项式定义域和值域均为[0, 1]，且f(0)=0 f(1)=1
+        polynomial = random.choice((
+            (0, 7.27419, -23.0881, 40.86, -40.2374, 20.1132, -3.922),
+            (0, 11.2642, -54.1671, 135.817, -180.721, 119.879, -31.0721),
+            (0, 7.77852, -37.3727, 103.78, -155.152, 115.664, -33.6981),
+            (0, 12.603, -61.815, 159.706, -227.619, 166.648, -48.5237),
+            (0, 9.94916, -35.3439, 57.2436, -43.3425, 12.4937),
+            (0, 8.88576, -29.9556, 49.0498, -39.2717, 12.2918),
+            (0, 8.7663, -28.3669, 42.9499, -30.9548, 8.60551),
+            (0, 7.36696, -20.605, 27.705, -18.1929, 4.72597),
+            (0, -.360233, 15.4068, -36.168, 32.64, -10.5186),
+            (0, -.260426, 10.5665, -17.711, 9.70626, -1.30134),
+            (0, -.00431368, .131857, 15.3877, -26.4217, 11.9064),
+            (0, -.607056, 19.5733, -56.8777, 62.7801, -23.8686),
+            (0, 5.84619, -14.9367, 19.8566, -13.293, 3.52692),
+        ))
+        actionTime = round((500 + targetPosX / 270 * 300 + random.randint(-100, 100)) / 20)
+        targetSeq = tuple(round(polynomialCalc(x / (actionTime - 1), polynomial) * targetPosX) for x in range(actionTime))
+        ac: ActionChains = ActionChains(browser, 20).click_and_hold(domYidunSlider).pause(random.randint(400, 700) / 1000)
+        for i in range(len(targetSeq) - 1):
+            ac = ac.move_by_offset(targetSeq[i + 1] - targetSeq[i], 0)
+        ac.pause(random.randint(100, 200) / 1000).release().perform()
 
-            # 模拟拖拽，时间单位为1/50s也就是20ms，根据滑动距离一共是500-800+-100ms
-            # 另外鼠标放到滑块上等待400-700ms，松开再等待100-200ms
-            # 拟合拖拽轨迹的多项式定义域和值域均为[0, 1]，且f(0)=0 f(1)=1
-            polynomial = random.choice((
-                (0, 7.27419, -23.0881, 40.86, -40.2374, 20.1132, -3.922),
-                (0, 11.2642, -54.1671, 135.817, -180.721, 119.879, -31.0721),
-                (0, 7.77852, -37.3727, 103.78, -155.152, 115.664, -33.6981),
-                (0, 12.603, -61.815, 159.706, -227.619, 166.648, -48.5237),
-                (0, 9.94916, -35.3439, 57.2436, -43.3425, 12.4937),
-                (0, 8.88576, -29.9556, 49.0498, -39.2717, 12.2918),
-                (0, 8.7663, -28.3669, 42.9499, -30.9548, 8.60551),
-                (0, 7.36696, -20.605, 27.705, -18.1929, 4.72597),
-                (0, -.360233, 15.4068, -36.168, 32.64, -10.5186),
-                (0, -.260426, 10.5665, -17.711, 9.70626, -1.30134),
-                (0, -.00431368, .131857, 15.3877, -26.4217, 11.9064),
-                (0, -.607056, 19.5733, -56.8777, 62.7801, -23.8686),
-                (0, 5.84619, -14.9367, 19.8566, -13.293, 3.52692),
-            ))
-            actionTime = round((500 + targetPosX / 270 * 300 + random.randint(-100, 100)) / 20)
-            targetSeq = tuple(round(polynomialCalc(x / (actionTime - 1), polynomial) * targetPosX) for x in range(actionTime))
-            ac: ActionChains = ActionChains(browser, 20).click_and_hold(domYidunSlider).pause(random.randint(400, 700) / 1000)
-            for i in range(len(targetSeq) - 1):
-                ac = ac.move_by_offset(targetSeq[i + 1] - targetSeq[i], 0)
-            ac.pause(random.randint(100, 200) / 1000).release().perform()
-
-            # 成功了吗？
-            try:
-                WebDriverWait(browser, 2).until(lambda d: domValidate.get_attribute('value'))
-            except TimeoutException:
-                pass
-            validate = domValidate.get_attribute('value')
-            if validate:
-                break
-    finally:
-        browser.close()
-        browser.switch_to.window(browser.window_handles[0])
+        # 成功了吗？
+        try:
+            WebDriverWait(browser, 2).until(lambda d: domValidate.get_attribute('value'))
+        except TimeoutException:
+            pass
+        validate = domValidate.get_attribute('value')
+        if validate:
+            break
     return validate
 
 # http服务器相关
@@ -208,6 +202,7 @@ if __name__ == '__main__':
     options = webdriver.FirefoxOptions()
     options.headless = True
     browser = webdriver.Firefox(options=options)
+    browser.get('https://stuhealth.jnu.edu.cn/')
 
     print(f'Server listening on port {port}.')
     try:
