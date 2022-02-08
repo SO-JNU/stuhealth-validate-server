@@ -152,3 +152,4 @@ cython_debug/
 #.idea/
 
 geckodriver.log
+pm2.config.json

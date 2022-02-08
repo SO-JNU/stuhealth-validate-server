@@ -21,6 +21,28 @@
 
 服务启动后将在 `/` 路径响应请求。
 
+你也可以使用 pm2 管理服务，配置文件参考：
+
+```json
+{
+    "apps": [
+        {
+            "name": "stuhealth-validate-server",
+            "interpreter": "python3",
+            "script": "main.py",
+            "args": [
+                "PORT",
+                "TOKEN"
+            ],
+            "instances": "1",
+            "max_restarts": 16,
+            "restart_delay": 1000,
+            "min_uptime": "10s"
+        }
+    ]
+}
+```
+
 ## TODO
 
 * 更通用的缺口识别方式。
