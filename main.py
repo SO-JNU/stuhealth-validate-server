@@ -208,6 +208,7 @@ if __name__ == '__main__':
     options = webdriver.FirefoxOptions()
     options.headless = True
     browser = webdriver.Firefox(options=options)
+    browser.install_addon(os.path.realpath('webdriver-cleaner'), temporary=True)
     browser.get('https://stuhealth.jnu.edu.cn/')
 
     print(f'Server listening on port {port}.')
