@@ -98,9 +98,6 @@ def getValidateToken() -> typing.Optional[str]:
         #     mode: "float",
         # });
         browser.execute_script('(document.querySelector(\'#captcha .yidun .yidun_bg-img[src^="https://"]\')||{}).src=null;window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
-    requestCount += 1
-    requestLastTime = time.time()
-
     WebDriverWait(browser, 3).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
     domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
     domYidunSlider = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_slider')
@@ -164,6 +161,8 @@ def getValidateToken() -> typing.Optional[str]:
         validate = domValidate.get_attribute('value')
         if validate:
             break
+    requestCount += 1
+    requestLastTime = time.time()
     return validate
 
 # http服务器相关
