@@ -6,7 +6,6 @@ import requests
 import struct
 import sys
 import threading
-import time
 import typing
 from PIL import Image
 from PIL import ImageChops
@@ -77,27 +76,18 @@ imgBackgroundWithHash = tuple((i, getImageHash(i)) for i in (Image.open(f'bgimg/
 lock = threading.Lock()
 token: str = None
 browser: webdriver.Firefox = None
-requestCount = 0
-requestLastTime = time.time()
 
 # 获取验证码的validate token
 def getValidateToken() -> typing.Optional[str]:
-    global requestCount
-    global requestLastTime
-
-    if requestCount >= 64 or time.time() - requestLastTime > 259200:
-        requestCount = 0
-        browser.refresh()
-    else:
-        # 只初始化验证码组件，不刷新页面
-        # (document.querySelector('#captcha .yidun .yidun_bg-img[src^="https://"]') || {}).src = null;
-        # window.initNECaptcha({
-        #     element: "#captcha",
-        #     captchaId: "7d856ac2068b41a1b8525f3fffe92d1c",
-        #     width: "320px",
-        #     mode: "float",
-        # });
-        browser.execute_script('(document.querySelector(\'#captcha .yidun .yidun_bg-img[src^="https://"]\')||{}).src=null;window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
+    # 触发验证码组件初始化
+    # (document.querySelector('#captcha .yidun .yidun_bg-img[src^="https://"]') || {}).src = null;
+    # window.initNECaptcha({
+    #     element: "#captcha",
+    #     captchaId: "7d856ac2068b41a1b8525f3fffe92d1c",
+    #     width: "320px",
+    #     mode: "float",
+    # });
+    browser.execute_script('(document.querySelector(\'#captcha .yidun .yidun_bg-img[src^="https://"]\')||{}).src=null;window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
     WebDriverWait(browser, 3).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
     domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
     domYidunSlider = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_slider')
@@ -161,8 +151,6 @@ def getValidateToken() -> typing.Optional[str]:
         validate = domValidate.get_attribute('value')
         if validate:
             break
-    requestCount += 1
-    requestLastTime = time.time()
     return validate
 
 # http服务器相关
