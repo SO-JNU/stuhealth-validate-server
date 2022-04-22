@@ -20,7 +20,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 # 获取图片的dhash
 def getImageHash(img: Image) -> bytes:
-    img = img.convert('L').resize((17, 16), Image.LANCZOS)
+    img = img.convert('L').resize((17, 16), Image.Resampling.LANCZOS)
     imgBytes = img.tobytes()
     imgHash = [0 for _ in range(16)]
     for i in range(16):
