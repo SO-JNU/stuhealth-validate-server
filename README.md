@@ -13,6 +13,8 @@
 
 使用前请安装好 Firefox 和 [GeckoDriver](https://github.com/mozilla/geckodriver)，然后 `pip3 install -r requirements.txt`。
 
+> 如果你使用的是 Ubuntu 22.04 或更新的系统，则安装 Firefox 时默认会使用 Snap 而不是 apt，但是使用 Snap 安装后的浏览器无法在无头模式下运行。你可以参考[这个教程](https://ubuntuhandbook.org/index.php/2022/04/install-firefox-deb-ubuntu-22-04/)修改为传统的使用 apt 安装的方式。
+
 `python3 main.py PORT TOKEN`
 
 * `PORT` 为占用的端口。
