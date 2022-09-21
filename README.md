@@ -1,5 +1,7 @@
 # stuhealth-validate-server
 
+> 2022 年 9 月 18 日起，打卡系统强制要求使用微信扫码登录才能访问。这一过程无法自动完成，因此这个 repo 将设为 Archived 状态，代码和说明文本仅作为存档，不再更新。**如果有人仍然要求你进行充满形式主义的打卡，我的建议是不打。**
+
 提供给[自动打卡工具](https://github.com/SO-JNU/stuhealth)使用的，一个比较简单的滑动验证码自动完成 API 服务。使用 Python、Selenium 和 GeckoDriver 实现。
 
 这个项目是一个“最简的可行产品”（Minimum viable product），因此存在一些局限性：
