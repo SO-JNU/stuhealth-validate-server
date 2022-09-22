@@ -3,12 +3,10 @@ import json
 import os
 import random
 import requests
-import struct
 import sys
 import threading
 import typing
 from PIL import Image
-from PIL import ImageChops
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from selenium import webdriver
@@ -18,46 +16,6 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from urllib import parse
-
-# 获取图片的dhash
-def getImageHash(img: Image) -> bytes:
-    img = img.convert('L').resize((17, 16), Image.Resampling.LANCZOS)
-    imgBytes = img.tobytes()
-    imgHash = [0 for _ in range(16)]
-    for i in range(16):
-        for j in range(16):
-            if imgBytes[(i << 4) + j] < imgBytes[(i << 4) + j + 1]:
-                imgHash[i] |= 1 << j
-    return struct.pack('<HHHHHHHHHHHHHHHH', *imgHash)
-
-# 计算两个dhash之间的汉明距离，范围是0-256，越低则图片越相似
-# 使用了查表法
-def getImageHashDiff(hashA: bytes, hashB: bytes) -> int:
-    diff = 0
-    for a, b in zip(hashA, hashB):
-        diff += (
-            0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-            4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8,
-        )[a ^ b]
-        # xored = a ^ b
-        # while xored:
-        #     diff += 1
-        #     xored &= xored - 1
-    return diff
 
 # 计算多项式，每一项是pn * (x ** n)
 def polynomialCalc(x: float, params: tuple[float]) -> float:
@@ -73,7 +31,6 @@ def untilFindElement(by: By, value: str) -> typing.Callable[[webdriver.Firefox],
     return func
 
 # 一些全局变量
-imgBackgroundWithHash = tuple((i, getImageHash(i)) for i in (Image.open(f'bgimg/{j}') for j in os.listdir('bgimg')))
 lock = threading.Lock()
 session = requests.Session()
 token: str = None
@@ -92,58 +49,111 @@ def getValidateToken() -> typing.Optional[str]:
     browser.execute_script('(document.querySelector(\'#captcha .yidun .yidun_bg-img[src^="https://"]\')||{}).src=null;window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
     WebDriverWait(browser, 3, .05).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
     domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
-    domYidunSlider = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_slider')
+    domYidunControl = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_control')
     domValidate = browser.find_element(By.CSS_SELECTOR, '#captcha input.yidun_input[name="NECaptchaValidate"]')
 
-    # 重试3次
-    for i in range(3):
+    validate = None
+    # 重试5次
+    for i in range(5):
         # 获取滑动验证码图片
         img = Image.open(io.BytesIO(session.get(domYidunImg.get_attribute('src').replace('@2x', '').replace('@3x', '')).content))
         # print(domYidunImg.get_attribute('src'))
-        imgHash = getImageHash(img)
-        imgBackground = min(imgBackgroundWithHash, key=lambda i: getImageHashDiff(imgHash, i[1]))[0]
+        img = img.convert('HSV')
+        for x in range(img.width):
+            for y in range(img.height):
+                p = list(img.getpixel((x, y)))
+                p[2] = 255
+                img.putpixel((x, y), tuple(p))
 
-        # 获取滑动位置
-        imgDiff = ImageChops.difference(img, imgBackground).convert('L')
-        imgDiffBytes = imgDiff.tobytes()
-        targetPosX = 0
-        targetPixelCount = 0
-        for x in range(imgDiff.width):
-            for y in range(imgDiff.height):
-                if imgDiffBytes[y * imgDiff.width + x] >= 16:
-                    targetPosX += x
-                    targetPixelCount += 1
-        targetPosX = round(targetPosX / targetPixelCount) - 22
-        # print(targetPosX)
-        # for y in range(imgDiff.height):
-        #     imgDiff.putpixel((targetPosX, y), 0xFFFFFF)
-        # imgDiff.save('diff.png')
-        targetPosX = targetPosX / 260 * 270
+        # 图片大小320x160，每块80x80
+        # +---+---+---+---+ Block:
+        # |   |   |   |   | 0123
+        # |  V|0 V|1 V|2  | 4567
+        # | H | H | H | H |
+        # +---+---+---+---+
+        # | 0 | 1 | 2 | 3 |
+        # |  V|3 V|4 V|5  |
+        # |   |   |   |   |
+        # +---+---+---+---+
+        borderH = [False for _ in range(4)]
+        borderV = [False for _ in range(6)]
+        img = img.convert('RGB')
 
-        # 模拟拖拽，时间单位为1/50s也就是20ms，根据滑动距离一共是500-800+-100ms
-        # 另外鼠标放到滑块上等待400-700ms，松开再等待100-200ms
-        # 拟合拖拽轨迹的多项式定义域和值域均为[0, 1]，且f(0)=0 f(1)=1
-        polynomial = random.choice((
-            (0, 7.27419, -23.0881, 40.86, -40.2374, 20.1132, -3.922),
-            (0, 11.2642, -54.1671, 135.817, -180.721, 119.879, -31.0721),
-            (0, 7.77852, -37.3727, 103.78, -155.152, 115.664, -33.6981),
-            (0, 12.603, -61.815, 159.706, -227.619, 166.648, -48.5237),
-            (0, 9.94916, -35.3439, 57.2436, -43.3425, 12.4937),
-            (0, 8.88576, -29.9556, 49.0498, -39.2717, 12.2918),
-            (0, 8.7663, -28.3669, 42.9499, -30.9548, 8.60551),
-            (0, 7.36696, -20.605, 27.705, -18.1929, 4.72597),
-            (0, -.360233, 15.4068, -36.168, 32.64, -10.5186),
-            (0, -.260426, 10.5665, -17.711, 9.70626, -1.30134),
-            (0, -.00431368, .131857, 15.3877, -26.4217, 11.9064),
-            (0, -.607056, 19.5733, -56.8777, 62.7801, -23.8686),
-            (0, 5.84619, -14.9367, 19.8566, -13.293, 3.52692),
-        ))
-        actionTime = round((40 + targetPosX / 270 * 25 + random.randint(0, 5)) / 20)
-        targetSeq = tuple(round(polynomialCalc(x / (actionTime - 1), polynomial) * targetPosX) for x in range(actionTime))
-        ac: ActionChains = ActionChains(browser, 20).click_and_hold(domYidunSlider).pause(random.randint(25, 50) / 1000)
-        for i in range(len(targetSeq) - 1):
-            ac = ac.move_by_offset(targetSeq[i + 1] - targetSeq[i], 0)
-        ac.pause(random.randint(25, 50) / 1000).release().perform()
+        for index, (rangeYA, rangeYB, rangeX) in enumerate((
+            (range(80 - 4, 80), range(80, 80 + 4), range(  0,  80)),
+            (range(80 - 4, 80), range(80, 80 + 4), range( 80, 160)),
+            (range(80 - 4, 80), range(80, 80 + 4), range(160, 240)),
+            (range(80 - 4, 80), range(80, 80 + 4), range(240, 320)),
+        )):
+            diffPixel = 0
+            for x in rangeX:
+                colorSumA = [0, 0, 0]
+                colorSumB = [0, 0, 0]
+                for ya, yb in zip(rangeYA, rangeYB):
+                    colorA = img.getpixel((x, ya))
+                    colorB = img.getpixel((x, yb))
+                    for i in range(3):
+                        colorSumA[i] += colorA[i]
+                        colorSumB[i] += colorB[i]
+                diffColor = 0
+                for i in range(3):
+                    if abs(colorSumA[i] - colorSumB[i]) / 4 > 24:
+                        diffColor += 1
+                if diffColor > 1:
+                    diffPixel += 1
+            borderH[index] = diffPixel > 20
+
+        for index, (rangeXA, rangeXB, rangeY) in enumerate((
+            (range(80  - 4,  80), range( 80,  80 + 4), range(  0,  80)),
+            (range(160 - 4, 160), range(160, 240 + 4), range(  0,  80)),
+            (range(240 - 4, 240), range(240, 240 + 4), range(  0,  80)),
+            (range(80  - 4,  80), range( 80,  80 + 4), range(  80, 160)),
+            (range(160 - 4, 160), range(160, 240 + 4), range(  80, 160)),
+            (range(240 - 4, 240), range(240, 240 + 4), range(  80, 160)),
+        )):
+            diffPixel = 0
+            for y in rangeY:
+                colorSumA = [0, 0, 0]
+                colorSumB = [0, 0, 0]
+                for xa, xb in zip(rangeXA, rangeXB):
+                    colorA = img.getpixel((xa, y))
+                    colorB = img.getpixel((xb, y))
+                    for i in range(3):
+                        colorSumA[i] += colorA[i]
+                        colorSumB[i] += colorB[i]
+                diffColor = 0
+                for i in range(3):
+                    if abs(colorSumA[i] - colorSumB[i]) / 4 > 24:
+                        diffColor += 1
+                if diffColor > 1:
+                    diffPixel += 1
+            borderV[index] = diffPixel > 20
+
+        # print(borderH, borderV)
+
+        blocks = [
+            (0, (borderH[0], borderV[0])),
+            (1, (borderH[1], borderV[0], borderV[1])),
+            (2, (borderH[2], borderV[1], borderV[2])),
+            (3, (borderH[3], borderV[2])),
+            (4, (borderH[0], borderV[3])),
+            (5, (borderH[1], borderV[3], borderV[4])),
+            (6, (borderH[2], borderV[4], borderV[5])),
+            (7, (borderH[3], borderV[5])),
+        ]
+        random.shuffle(blocks)
+        blocks.sort(key=lambda e: sum(e[1]) / len(e[1]), reverse=True)
+        imgFromBlock, imgToBlock = tuple(x[0] for x in blocks[:2])
+        # print(imgFromBlock, imgToBlock)
+
+        domYidunImgFromBlock = browser.find_element(By.CSS_SELECTOR, f'#captcha .yidun .yidun_bgimg .yidun_inference.yidun_inference--{imgFromBlock}')
+        domYidunImgToBlock = browser.find_element(By.CSS_SELECTOR, f'#captcha .yidun .yidun_bgimg .yidun_inference.yidun_inference--{imgToBlock}')
+
+        ActionChains(browser, 20).move_to_element(domYidunControl).pause(.5).perform()
+        moveOffsetX = (domYidunImgToBlock.rect['x'] + random.randint(0, round(domYidunImgToBlock.rect['width']))) - (domYidunImgFromBlock.rect['x'] + random.randint(0, round(domYidunImgFromBlock.rect['width'])))
+        moveOffsetY = (domYidunImgToBlock.rect['y'] + random.randint(0, round(domYidunImgToBlock.rect['height']))) - (domYidunImgFromBlock.rect['y'] + random.randint(0, round(domYidunImgFromBlock.rect['height'])))
+        # print(moveOffsetX, moveOffsetY)
+        ActionChains(browser, round(50 + .5 * (moveOffsetX ** 2 + moveOffsetY ** 2) ** .5)).drag_and_drop_by_offset(domYidunImgFromBlock, moveOffsetX, moveOffsetY).perform()
 
         # 成功了吗？
         try:
