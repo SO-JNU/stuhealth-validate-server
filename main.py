@@ -17,6 +17,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
+from urllib import parse
 
 # 获取图片的dhash
 def getImageHash(img: Image) -> bytes:
@@ -74,6 +75,7 @@ def untilFindElement(by: By, value: str) -> typing.Callable[[webdriver.Firefox],
 # 一些全局变量
 imgBackgroundWithHash = tuple((i, getImageHash(i)) for i in (Image.open(f'bgimg/{j}') for j in os.listdir('bgimg')))
 lock = threading.Lock()
+session = requests.Session()
 token: str = None
 browser: webdriver.Firefox = None
 
@@ -88,7 +90,7 @@ def getValidateToken() -> typing.Optional[str]:
     #     mode: "float",
     # });
     browser.execute_script('(document.querySelector(\'#captcha .yidun .yidun_bg-img[src^="https://"]\')||{}).src=null;window.initNECaptcha({element:"#captcha",captchaId:"7d856ac2068b41a1b8525f3fffe92d1c",width:"320px",mode:"float"})')
-    WebDriverWait(browser, 3).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
+    WebDriverWait(browser, 3, .05).until(untilFindElement(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img[src^="https://"]'))
     domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
     domYidunSlider = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_slider')
     domValidate = browser.find_element(By.CSS_SELECTOR, '#captcha input.yidun_input[name="NECaptchaValidate"]')
@@ -96,7 +98,7 @@ def getValidateToken() -> typing.Optional[str]:
     # 重试3次
     for i in range(3):
         # 获取滑动验证码图片
-        img = Image.open(io.BytesIO(requests.get(domYidunImg.get_attribute('src').replace('@2x', '').replace('@3x', '')).content))
+        img = Image.open(io.BytesIO(session.get(domYidunImg.get_attribute('src').replace('@2x', '').replace('@3x', '')).content))
         # print(domYidunImg.get_attribute('src'))
         imgHash = getImageHash(img)
         imgBackground = min(imgBackgroundWithHash, key=lambda i: getImageHashDiff(imgHash, i[1]))[0]
@@ -136,12 +138,12 @@ def getValidateToken() -> typing.Optional[str]:
             (0, -.607056, 19.5733, -56.8777, 62.7801, -23.8686),
             (0, 5.84619, -14.9367, 19.8566, -13.293, 3.52692),
         ))
-        actionTime = round((500 + targetPosX / 270 * 300 + random.randint(-100, 100)) / 20)
+        actionTime = round((40 + targetPosX / 270 * 25 + random.randint(0, 5)) / 20)
         targetSeq = tuple(round(polynomialCalc(x / (actionTime - 1), polynomial) * targetPosX) for x in range(actionTime))
-        ac: ActionChains = ActionChains(browser, 20).click_and_hold(domYidunSlider).pause(random.randint(400, 700) / 1000)
+        ac: ActionChains = ActionChains(browser, 20).click_and_hold(domYidunSlider).pause(random.randint(25, 50) / 1000)
         for i in range(len(targetSeq) - 1):
             ac = ac.move_by_offset(targetSeq[i + 1] - targetSeq[i], 0)
-        ac.pause(random.randint(100, 200) / 1000).release().perform()
+        ac.pause(random.randint(25, 50) / 1000).release().perform()
 
         # 成功了吗？
         try:
@@ -203,12 +205,27 @@ if __name__ == '__main__':
         print(f'Usage: {sys.argv[0]} PORT TOKEN')
         sys.exit(0)
 
-    port = int(sys.argv[1])
-    token = sys.argv[2]
+    port, token = int(sys.argv[1]), sys.argv[2]
     options = webdriver.FirefoxOptions()
     options.headless = True
+
+    s = requests.Session()
+    s.hooks['response'].append(lambda r, *args, **kwargs: r.raise_for_status())
+    s.get('https://stuhealth.jnu.edu.cn/', allow_redirects=False)
+    r = s.get('https://stuhealth.jnu.edu.cn/jnu_authentication/public/redirect', allow_redirects=False)
+    verifyID = parse.parse_qs(parse.urlparse(r.headers['Location']).query)['verifyID'][0]
+    s.get('https://auth7.jnu.edu.cn/wechat_auth/wechat/wechatScanAsync', params={'verifyID': verifyID})
+
     browser = webdriver.Firefox(options=options)
     browser.install_addon(os.path.realpath('webdriver-cleaner'), temporary=True)
+    browser.get('https://stuhealth.jnu.edu.cn/jnu_authentication/public/error')
+    browser.add_cookie({
+        'name': 'JNU_AUTH_VERIFY_COOKIE',
+        'value': s.cookies.get('JNU_AUTH_VERIFY_COOKIE'),
+        'path': '/',
+        'secure': True,
+        'httpOnly': True,
+    })
     browser.get('https://stuhealth.jnu.edu.cn/')
 
     print(f'Server listening on port {port}.')
