@@ -213,7 +213,7 @@ if __name__ == '__main__':
     print('stuhealth-validate-server\n\nSource on GitHub: https://github.com/SO-JNU/stuhealth-validate-server\nLicense: GNU AGPLv3\nAuthor: Akarin\n')
     if len(sys.argv) < 3:
         print(f'Usage: {sys.argv[0]} PORT TOKEN')
-        sys.exit(0)
+        # sys.exit(0)
 
     port, token = int(sys.argv[1]), sys.argv[2]
     options = webdriver.FirefoxOptions()
@@ -221,8 +221,7 @@ if __name__ == '__main__':
 
     s = requests.Session()
     s.hooks['response'].append(lambda r, *args, **kwargs: r.raise_for_status())
-    s.get('https://stuhealth.jnu.edu.cn/', allow_redirects=False)
-    r = s.get('https://stuhealth.jnu.edu.cn/jnu_authentication/public/redirect', allow_redirects=False)
+    r = s.get('https://stuhealth.jnu.edu.cn/', allow_redirects=False)
     verifyID = parse.parse_qs(parse.urlparse(r.headers['Location']).query)['verifyID'][0]
     s.get('https://auth7.jnu.edu.cn/wechat_auth/wechat/wechatScanAsync', params={'verifyID': verifyID})
 
@@ -230,8 +229,8 @@ if __name__ == '__main__':
     browser.install_addon(os.path.realpath('webdriver-cleaner'), temporary=True)
     browser.get('https://stuhealth.jnu.edu.cn/jnu_authentication/public/error')
     browser.add_cookie({
-        'name': 'JNU_AUTH_VERIFY_COOKIE',
-        'value': s.cookies.get('JNU_AUTH_VERIFY_COOKIE'),
+        'name': 'JNU_AUTH_VERIFY_TOKEN',
+        'value': s.cookies.get('JNU_AUTH_VERIFY_TOKEN'),
         'path': '/',
         'secure': True,
         'httpOnly': True,
