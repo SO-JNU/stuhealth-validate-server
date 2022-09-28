@@ -17,10 +17,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from urllib import parse
 
-# 计算多项式，每一项是pn * (x ** n)
-def polynomialCalc(x: float, params: tuple[float]) -> float:
-    return sum(p * (x ** n) for n, p in enumerate(params))
-
 def untilFindElement(by: By, value: str) -> typing.Callable[[webdriver.Firefox], bool]:
     def func(d: webdriver.Firefox) -> bool:
         try:
@@ -51,6 +47,7 @@ def getValidateToken() -> typing.Optional[str]:
     domYidunImg = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_bg-img')
     domYidunControl = browser.find_element(By.CSS_SELECTOR, '#captcha .yidun .yidun_control')
     domValidate = browser.find_element(By.CSS_SELECTOR, '#captcha input.yidun_input[name="NECaptchaValidate"]')
+    browser.execute_script('document.getElementById("captcha").style.transform="translateY(200%)"')
 
     validate = None
     # 重试5次
@@ -213,7 +210,7 @@ if __name__ == '__main__':
     print('stuhealth-validate-server\n\nSource on GitHub: https://github.com/SO-JNU/stuhealth-validate-server\nLicense: GNU AGPLv3\nAuthor: Akarin\n')
     if len(sys.argv) < 3:
         print(f'Usage: {sys.argv[0]} PORT TOKEN')
-        # sys.exit(0)
+        sys.exit(0)
 
     port, token = int(sys.argv[1]), sys.argv[2]
     options = webdriver.FirefoxOptions()
@@ -227,6 +224,7 @@ if __name__ == '__main__':
 
     browser = webdriver.Firefox(options=options)
     browser.install_addon(os.path.realpath('webdriver-cleaner'), temporary=True)
+    browser.install_addon(os.path.realpath('request-blocker'), temporary=True)
     browser.get('https://stuhealth.jnu.edu.cn/jnu_authentication/public/error')
     browser.add_cookie({
         'name': 'JNU_AUTH_VERIFY_TOKEN',

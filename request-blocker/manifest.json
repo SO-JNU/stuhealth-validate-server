@@ -1,0 +1,18 @@
+{
+  "manifest_version": 2,
+  "name": "request-blocker",
+  "version": "1.0",
+  "permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "*://*.126.net/*",
+    "*://*.163.com/*",
+    "*://*.163yun.com/*",
+    "*://*.amap.com/*",
+    "*://*.jnu.edu.cn/*",
+    "*://*.netease.com/*"
+  ],
+  "background": {
+    "scripts": ["main.js"]
+  }
+}
