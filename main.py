@@ -218,6 +218,7 @@ if __name__ == '__main__':
 
     s = requests.Session()
     s.hooks['response'].append(lambda r, *args, **kwargs: r.raise_for_status())
+    s.headers['User-Agent'] = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.0.0 Safari/537.36'
     r = s.get('https://stuhealth.jnu.edu.cn/', allow_redirects=False)
     verifyID = parse.parse_qs(parse.urlparse(r.headers['Location']).query)['verifyID'][0]
     s.get('https://auth7.jnu.edu.cn/wechat_auth/wechat/wechatScanAsync', params={'verifyID': verifyID})
